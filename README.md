@@ -140,7 +140,7 @@ This is a suggestion, not a requirement. Adjust to your workflow.
 
 We test against your **live deployment URL** — not localhost. Bonus points available for building a Reviewer Agent that auto-evaluates deliverables (see `REQUIREMENTS.md`). Full rubric in `EVALUATION.md`.
 
-All valid submissions receive **$20 compensation**. Top candidates are invited to further rounds.
+
 
 ---
 
