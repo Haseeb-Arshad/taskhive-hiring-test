@@ -12,6 +12,7 @@ export default defineConfig({
     sequence: {
       concurrent: false,
     },
+    exclude: ["**/node_modules/**", "**/agent_works/**"],
   },
   resolve: {
     alias: {

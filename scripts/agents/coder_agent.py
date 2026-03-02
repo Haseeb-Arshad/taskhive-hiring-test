@@ -526,40 +526,28 @@ def process_task(client: TaskHiveClient, task_id: int) -> dict:
 
         # ── STEP 3: Scaffold (if needed) ──────────────────────────────
         scaffold_cmd = plan.get("scaffold_command")
-        git_already_exists = (task_dir / ".git").exists()
-
         if scaffold_cmd and not state.get("scaffolded"):
-            if git_already_exists:
-                # .git is already on disk from a previous run — skip scaffolding.
-                # create-next-app would fail because it refuses to overwrite an existing git repo.
-                log_warn(
-                    "Skipping scaffold: .git already exists on disk from a previous run.",
-                    AGENT_NAME,
-                )
+            log_think(f"Scaffolding project: {scaffold_cmd}", AGENT_NAME)
+            append_build_log(task_dir, f"Scaffold: {scaffold_cmd}")
+            write_progress(task_dir, task_id, "execution", "Scaffolding project",
+                           "Setting up project structure and boilerplate",
+                           f"Running: {scaffold_cmd[:80]}", 15.0)
+
+            rc, out = run_shell_combined(scaffold_cmd, task_dir, timeout=3600)
+            log_command(task_dir, scaffold_cmd, rc, out)
+
+            if rc == 0:
+                h = commit_step(task_dir, f"chore: scaffold project ({plan.get('project_type', 'unknown')})")
+                if h:
+                    append_commit_log(task_dir, h, "chore: scaffold project")
+                    log_ok(f"Scaffolded and committed [{h}]", AGENT_NAME)
+
                 state["scaffolded"] = True
                 _save_state(state_file, state)
             else:
-                log_think(f"Scaffolding project: {scaffold_cmd}", AGENT_NAME)
-                append_build_log(task_dir, f"Scaffold: {scaffold_cmd}")
-                write_progress(task_dir, task_id, "execution", "Scaffolding project",
-                               "Setting up project structure and boilerplate",
-                               f"Running: {scaffold_cmd[:80]}", 15.0)
-
-                rc, out = run_shell_combined(scaffold_cmd, task_dir, timeout=3600)
-                log_command(task_dir, scaffold_cmd, rc, out)
-
-                if rc == 0:
-                    h = commit_step(task_dir, f"chore: scaffold project ({plan.get('project_type', 'unknown')})")
-                    if h:
-                        append_commit_log(task_dir, h, "chore: scaffold project")
-                        log_ok(f"Scaffolded and committed [{h}]", AGENT_NAME)
-
-                    state["scaffolded"] = True
-                    _save_state(state_file, state)
-                else:
-                    log_warn(f"Scaffold command failed (rc={rc}). Continuing anyway.", AGENT_NAME)
-                    state["scaffolded"] = True  # Don't retry
-                    _save_state(state_file, state)
+                log_warn(f"Scaffold command failed (rc={rc}). Continuing anyway.", AGENT_NAME)
+                state["scaffolded"] = True  # Don't retry
+                _save_state(state_file, state)
 
         # ── STEP 4: Generate code for remaining Architectural blueprint ─
         log_think("Requesting architectural blueprint enhancement...", AGENT_NAME)
