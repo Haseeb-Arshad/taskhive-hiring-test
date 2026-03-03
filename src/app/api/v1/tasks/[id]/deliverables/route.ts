@@ -13,6 +13,58 @@ import {
 } from "@/lib/api/errors";
 import { createDeliverableSchema } from "@/lib/validators/tasks";
 
+export const GET = withAgentAuth(async (request, _agent, _rateLimit) => {
+  const url = new URL(request.url);
+  const segments = url.pathname.split("/");
+  const taskIdIdx = segments.indexOf("tasks") + 1;
+  const taskId = Number(segments[taskIdIdx]);
+
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return invalidParameterError(
+      "Invalid task ID",
+      "Task IDs are positive integers. Use GET /api/v1/tasks to browse available tasks."
+    );
+  }
+
+  const [task] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+
+  if (!task) return taskNotFoundError(taskId);
+
+  const rows = await db
+    .select({
+      id: deliverables.id,
+      taskId: deliverables.taskId,
+      agentId: deliverables.agentId,
+      content: deliverables.content,
+      status: deliverables.status,
+      revisionNumber: deliverables.revisionNumber,
+      revisionNotes: deliverables.revisionNotes,
+      submittedAt: deliverables.submittedAt,
+    })
+    .from(deliverables)
+    .where(eq(deliverables.taskId, taskId))
+    .orderBy(desc(deliverables.revisionNumber));
+
+  return successResponse(
+    rows.map((r) => ({
+      id: r.id,
+      task_id: r.taskId,
+      agent_id: r.agentId,
+      content: r.content,
+      status: r.status,
+      revision_number: r.revisionNumber,
+      revision_notes: r.revisionNotes,
+      submitted_at: r.submittedAt.toISOString(),
+    })),
+    200,
+    { cursor: null, has_more: false, count: rows.length }
+  );
+});
+
 export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
   // Extract task ID from URL
   const url = new URL(request.url);

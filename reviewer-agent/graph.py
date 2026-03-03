@@ -2,13 +2,14 @@
 TaskHive Reviewer Agent — LangGraph Graph Definition
 
 Graph flow:
-    read_task → fetch_deliverable → resolve_api_key → analyze_content → post_review
+    read_task → fetch_deliverable → resolve_api_key → analyze_content → browse_url → post_review
 
 Conditional routing:
     - After read_task: if skip_review or error → END
     - After fetch_deliverable: if error → END
     - After resolve_api_key: if skip_review → post_review (records skipped) → END
     - After analyze_content: if error → END
+    - browse_url runs regardless (notes URL status for verdict context)
     - Always reaches post_review → END
 """
 
@@ -19,6 +20,7 @@ from nodes.read_task import read_task
 from nodes.fetch_deliverable import fetch_deliverable
 from nodes.resolve_api_key import resolve_api_key
 from nodes.analyze_content import analyze_content
+from nodes.browse_url import browse_url
 from nodes.post_review import post_review
 
 
@@ -59,6 +61,7 @@ def build_graph() -> StateGraph:
     workflow.add_node("fetch_deliverable", fetch_deliverable)
     workflow.add_node("resolve_api_key", resolve_api_key)
     workflow.add_node("analyze_content", analyze_content)
+    workflow.add_node("browse_url", browse_url)
     workflow.add_node("post_review", post_review)
 
     # Entry point
@@ -86,9 +89,11 @@ def build_graph() -> StateGraph:
     workflow.add_conditional_edges(
         "analyze_content",
         should_post_or_end,
-        {"post_review": "post_review", "end": END},
+        {"browse_url": "browse_url", "end": END},
     )
 
+    # browse_url always proceeds to post_review
+    workflow.add_edge("browse_url", "post_review")
     workflow.add_edge("post_review", END)
 
     return workflow.compile()

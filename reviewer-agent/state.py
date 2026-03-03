@@ -45,3 +45,6 @@ class ReviewerState(TypedDict, total=False):
     # ── Errors ────────────────────────────────────────────────────────────────
     error: Optional[str]
     skip_review: bool  # True when no LLM key available
+
+    # ── URL check (populated by browse_url node) ───────────────────────────────
+    url_check_results: dict[str, Any]  # {url: {status_code, reachable, error?}}

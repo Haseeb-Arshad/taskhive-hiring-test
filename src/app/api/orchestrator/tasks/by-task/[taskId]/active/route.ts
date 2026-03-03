@@ -21,7 +21,13 @@ export async function GET(
   const stateFile = path.join(taskDir, ".swarm_state.json");
 
   if (!fs.existsSync(stateFile)) {
-    return NextResponse.json({ ok: false, error: "No active execution for this task" }, { status: 404 });
+    // Return 200 (not 404) so the browser doesn't log a console error.
+    // The frontend polls this endpoint and a 404 would break the polling loop.
+    // ok:false + reason lets the UI show "agent not started yet" gracefully.
+    return NextResponse.json(
+      { ok: false, reason: "not_started", error: "No active execution for this task" },
+      { status: 200 }
+    );
   }
 
   try {

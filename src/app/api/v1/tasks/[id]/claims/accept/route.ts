@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
-import { tasks, taskClaims, users, creditTransactions } from "@/lib/db/schema";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { tasks, taskClaims } from "@/lib/db/schema";
+import { eq, and, ne } from "drizzle-orm";
 import { withAgentAuth } from "@/lib/api/handler";
 import { successResponse } from "@/lib/api/envelope";
 import {
@@ -50,7 +50,6 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
       id: tasks.id,
       status: tasks.status,
       posterId: tasks.posterId,
-      budgetCredits: tasks.budgetCredits,
     })
     .from(tasks)
     .where(eq(tasks.id, taskId))
@@ -91,11 +90,13 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
     return conflictError(
       "CLAIM_NOT_FOUND",
       `Claim ${claimId} not found or not pending on task ${taskId}`,
-      "Check pending claims with GET /api/v1/tasks/:id/claims"
+      "Check pending claims with GET /api/v1/tasks/${taskId}/claims"
     );
   }
 
   // Accept claim, reject others, and update task atomically (with optimistic lock)
+  // NOTE: No escrow — budget is a promise, payment happens off-platform.
+  // Credits only flow when a deliverable is accepted (see POST /tasks/:id/deliverables/accept).
   let txConflict = false;
   try {
     await db.transaction(async (tx) => {
@@ -115,41 +116,13 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
         return;
       }
 
-      // Escrow credits from poster
-      const [poster] = await tx
-        .select({ creditBalance: users.creditBalance })
-        .from(users)
-        .where(eq(users.id, task.posterId));
-
-      if (!poster || poster.creditBalance < task.budgetCredits) {
-        throw new Error("INSUFFICIENT_CREDITS");
-      }
-
-      const [updatedUser] = await tx
-        .update(users)
-        .set({
-          creditBalance: sql`${users.creditBalance} - ${task.budgetCredits}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, task.posterId))
-        .returning({ creditBalance: users.creditBalance });
-
-      await tx.insert(creditTransactions).values({
-        userId: task.posterId,
-        amount: -task.budgetCredits,
-        type: "payment",
-        taskId: taskId,
-        description: `Escrow for task #${taskId}`,
-        balanceAfter: updatedUser.creditBalance,
-      });
-
       // Accept this claim
       await tx
         .update(taskClaims)
         .set({ status: "accepted" })
         .where(eq(taskClaims.id, claimId));
 
-      // Reject all other pending claims
+      // Reject all other pending claims for this task
       await tx
         .update(taskClaims)
         .set({ status: "rejected" })
@@ -161,13 +134,7 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
           )
         );
     });
-  } catch (err) {
-    if (err instanceof Error && err.message === "INSUFFICIENT_CREDITS") {
-      return validationError(
-        `Insufficient credits. Task requires ${task.budgetCredits} credits.`,
-        "The task poster does not have enough credits to escrow for this task"
-      );
-    }
+  } catch {
     txConflict = true;
   }
 
@@ -175,7 +142,7 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
     return conflictError(
       "TASK_NOT_OPEN",
       `Task ${taskId} is no longer open`,
-      "Another claim was accepted concurrently"
+      "Another claim was accepted concurrently. Browse other tasks with GET /api/v1/tasks"
     );
   }
 
@@ -186,7 +153,7 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
     agent_id: claim.agentId,
   });
 
-  // Dispatch webhook for rejected claims (fire-and-forget, non-critical)
+  // Dispatch webhooks for rejected claims (fire-and-forget, non-critical)
   void (async () => {
     try {
       const rejectedClaims = await db
@@ -217,6 +184,6 @@ export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
     claim_id: claimId,
     agent_id: claim.agentId,
     status: "accepted",
-    message: `Claim ${claimId} accepted. Task ${taskId} is now claimed.`,
+    message: `Claim ${claimId} accepted. Task ${taskId} is now claimed. Credits will flow when the deliverable is accepted.`,
   });
 });

@@ -350,6 +350,14 @@ def process_task(client: TaskHiveClient, task_id: int) -> dict:
         with open(state_file, "w") as f:
             json.dump(state, f, indent=2)
 
+        # ── Cleanup Workspace (Backend requirement) ─────────────────────
+        try:
+            import shutil
+            shutil.rmtree(task_dir, ignore_errors=True)
+            log_ok(f"Cleaned up local repository workspace: {task_dir}", AGENT_NAME)
+        except Exception as e:
+            log_warn(f"Failed to clean up workspace {task_dir}: {e}", AGENT_NAME)
+
         return {
             "action": "deployed",
             "task_id": task_id,

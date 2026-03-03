@@ -27,7 +27,7 @@ from agents.base_agent import (
     TaskHiveClient,
     llm_json,
     smart_llm_call,
-    kimi_enhance_prompt,
+    claude_enhance_prompt,
     log_err,
     log_ok,
     log_think,
@@ -128,6 +128,9 @@ def plan_implementation(title: str, desc: str, reqs: str, past_errors: str = "",
         "core logic, API routes, UI components, tests). "
         "YOU MUST OUTPUT ONLY VALID JSON. NO CONVERSATIONAL TEXT.\n\n"
         "CRITICAL — PROJECT TYPE RULES (STRICTLY ENFORCED):\n"
+        "- ALWAYS prioritize the latest versions of all technologies, frameworks, and tools.\n"
+        "- CRITICAL: ALWAYS use the '@latest' tag for npx/npm/pip commands and specify 'latest' for all dependency versions in package.json/requirements.txt. NEVER use specific version numbers unless absolutely necessary to fix a known bug.\n"
+        "- BE PROACTIVE: If you encounter an error, version conflict, or build failure, RESOLVE IT WHATEVER IT TAKES. You are empowered to change the project structure, switch tools, or adopt a completely different technical approach to bypass the blocker.\n"
         "- You MUST ONLY use JavaScript/TypeScript frontend or fullstack frameworks.\n"
         "- DEFAULT to 'nextjs' for ALL tasks: websites, web apps, dashboards, "
         "landing pages, portfolios, e-commerce, SaaS, tools with a UI, APIs, backends — everything.\n"
@@ -138,7 +141,7 @@ def plan_implementation(title: str, desc: str, reqs: str, past_errors: str = "",
         "- NEVER use 'node' standalone — if backend is needed, use Next.js API routes.\n"
         "- Backend logic MUST live inside the framework (Next.js API routes, server actions).\n"
         "- NO external database connections — use in-memory state or localStorage only.\n"
-        "- When in doubt: choose 'nextjs'. It is ALWAYS the safe default.\n"
+        "- When in doubt: choose 'nextjs'. It is ALWAYS the safe default. The NEXTJS framework MUST be prioritized before you proceed with implementation.\n"
         "- For 'nextjs' always use scaffold_command: "
         "'npx create-next-app@latest ./ --typescript --tailwind --eslint --app --no-src-dir --import-alias @/* --yes --force'\n\n"
         "CRITICAL — FILE LIST RULES:\n"
@@ -168,13 +171,12 @@ def plan_implementation(title: str, desc: str, reqs: str, past_errors: str = "",
         '        {"path": "tsconfig.json", "description": "TypeScript config"},\n'
         '        {"path": "app/layout.tsx", "description": "Root layout component"}\n'
         '      ]\n'
-        '    }\n'
         '  ],\n'
-        '  "test_command": "npm test"\n'
+        '  "test_command": "npm run build"\n'
         '}\n'
     )
 
-    result = llm_json(system, user, max_tokens=2048, complexity=complexity)
+    result = llm_json(system, user, max_tokens=2048, complexity=complexity, provider="claude-sonnet")
 
     # ── Post-processing: enforce project type and scaffold ──
     if isinstance(result, dict):
@@ -330,7 +332,7 @@ _SKILL_KEYWORD_MAP: list[tuple[list[str], list[str]]] = [
      ["senior-security"]),
     # Full-stack (always include)
     (["*"],
-     ["senior-fullstack", "code-reviewer"]),
+     ["senior-fullstack", "code-reviewer", "frontend-design"]),
 ]
 
 
@@ -403,6 +405,7 @@ def process_task(client: TaskHiveClient, task_id: int) -> dict:
         task_dir = WORKSPACE_DIR / f"task_{task_id}"
         task_dir.mkdir(parents=True, exist_ok=True)
         state_file = task_dir / ".swarm_state.json"
+        log_think(f"Loading state from: {state_file}", AGENT_NAME)
 
         state = {
             "status": "coding",
@@ -533,6 +536,23 @@ def process_task(client: TaskHiveClient, task_id: int) -> dict:
                            "Setting up project structure and boilerplate",
                            f"Running: {scaffold_cmd[:80]}", 15.0)
 
+            # ── Clean up conflicting files before scaffolding ──
+            # create-next-app fails if the directory is not empty.
+            # We must move or remove files except state and lock.
+            log_think("Cleaning up task directory for scaffolding...", AGENT_NAME)
+            conflicting_files = [".build_log", ".dispatch_log", ".git", ".gitignore", "progress.jsonl", "tsconfig.json", "app", "components", "lib", "public", ".env", ".env.local"]
+            for f in conflicting_files:
+                p = task_dir / f
+                if p.exists():
+                    try:
+                        if p.is_dir():
+                            import shutil
+                            shutil.rmtree(p)
+                        else:
+                            p.unlink()
+                    except Exception as e:
+                        log_warn(f"Could not remove {f} before scaffold: {e}", AGENT_NAME)
+
             rc, out = run_shell_combined(scaffold_cmd, task_dir, timeout=3600)
             log_command(task_dir, scaffold_cmd, rc, out)
 
@@ -550,19 +570,26 @@ def process_task(client: TaskHiveClient, task_id: int) -> dict:
                 _save_state(state_file, state)
 
         # ── STEP 4: Generate code for remaining Architectural blueprint ─
-        log_think("Requesting architectural blueprint enhancement...", AGENT_NAME)
+        log_think("Requesting architectural blueprint enhancement from Claude...", AGENT_NAME)
         write_progress(task_dir, task_id, "planning", "Enhancing architecture blueprint",
                        "AI is generating detailed architectural specification",
-                       "Consulting Kimi K2 Thinking for deep technical blueprint...", 18.0)
+                       "Consulting Claude for deep technical blueprint...", 18.0)
 
         prompt = (
             f"You are the Coder Agent. We are building a solution for this task:\n"
             f"Title: {title}\nDescription: {desc}\nRequirements: {reqs}\n"
         )
         if past_errors:
-            prompt += f"\nPREVIOUS TEST FAILED WITH THIS ERROR:\n{past_errors}\nYou must fix this.\n"
+            prompt += (
+                f"\nCRITICAL: PREVIOUS TEST FAILED WITH THIS ERROR:\n{past_errors}\n"
+                "YOU MUST RESOLVE THIS ISSUE WHATEVER IT TAKES. "
+                "Do not simply retry the same code. If the current approach is failing, "
+                "switch to a different architecture, change dependency versions, "
+                "rewrite core logic, or try an entirely new technical strategy to bypass this blocker. "
+                "You are empowered to be as aggressive as needed to achieve a passing build.\n"
+            )
 
-        enhanced_blueprint = kimi_enhance_prompt(prompt)
+        enhanced_blueprint = claude_enhance_prompt(prompt)
 
         # Load skills — from the TaskHive skills dir AND from .claude/skills/ in both repos
         skill_contents = _load_skills_for_task(title, desc, reqs, plan)

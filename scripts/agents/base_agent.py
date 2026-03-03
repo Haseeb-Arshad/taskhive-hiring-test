@@ -138,7 +138,9 @@ def write_progress(
 
 def llm_call(system: str, user: str, max_tokens: int = 2048, provider: str = "kimi") -> str:
     """Multi-provider LLM call wrapper."""
-    if provider == "claude":
+    if provider == "claude" or provider == "claude-sonnet":
+        # Use current 3.5 Sonnet model ID
+        model_id = "claude-3-5-sonnet-20240620"
         resp = httpx.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -147,27 +149,7 @@ def llm_call(system: str, user: str, max_tokens: int = 2048, provider: str = "ki
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-sonnet-4-6",
-                "max_tokens": max_tokens,
-                "system": system,
-                "messages": [{"role": "user", "content": user}],
-            },
-            timeout=3600.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["content"][0]["text"]
-    
-    elif provider == "claude-sonnet":
-        resp = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-sonnet-4-6",
+                "model": model_id,
                 "max_tokens": max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user}],
@@ -183,13 +165,13 @@ def llm_call(system: str, user: str, max_tokens: int = 2048, provider: str = "ki
         if not api_key:
             raise ValueError("Kimi/Moonshot API key not configured")
         resp = httpx.post(
-            "https://api.moonshot.ai/v1/chat/completions",
+            "https://api.moonshot.cn/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": "kimi-k2-thinking",
+                "model": "kimi-k2.5-thinking",
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -233,20 +215,43 @@ def llm_call(system: str, user: str, max_tokens: int = 2048, provider: str = "ki
 
 def smart_llm_call(system: str, user: str, max_tokens: int = 2048, complexity: str = "routine") -> str:
     """Routes to Kimi/Trinity first, falling back to Claude only if needed or complex."""
-    if complexity == "high":
-        providers = ["claude", "kimi", "trinity"]
-    elif complexity == "extreme":
-        providers = ["claude-sonnet", "claude", "kimi", "trinity"]
+    if complexity == "extreme":
+        providers = ["claude-sonnet", "kimi", "trinity"]
+    elif complexity == "high":
+        providers = ["kimi", "claude-sonnet", "trinity"]
     else:
-        providers = ["kimi", "trinity", "claude"]
+        providers = ["kimi", "trinity", "claude-sonnet"]
     
     last_error = "No providers attempted"
     for p in providers:
-        try:
-            return llm_call(system, user, max_tokens, provider=p)
-        except Exception as e:
-            last_error = str(e)
-            log_warn(f"Provider {p} failed: {e}. Falling back...")
+        # Skip if no key
+        if p.startswith("claude") and not ANTHROPIC_KEY: continue
+        if p == "kimi" and not (MOONSHOT_API_KEY or KIMI_KEY): continue
+        if p == "trinity" and not OPENROUTER_KEY: continue
+
+        # Internal retry for the same provider on transient errors
+        for attempt in range(2):
+            try:
+                return llm_call(system, user, max_tokens, provider=p)
+            except httpx.HTTPStatusError as e:
+                # Immediate fallback for auth/credit errors
+                if e.response.status_code in (401, 402, 403, 404):
+                    last_error = f"{p} (HTTP {e.response.status_code})"
+                    log_warn(f"Provider {p} auth/credit failure ({e.response.status_code}). Switching...")
+                    break 
+                
+                # Retry once for 5xx
+                if e.response.status_code >= 500 and attempt == 0:
+                    time.sleep(1)
+                    continue
+                
+                last_error = str(e)
+                log_warn(f"Provider {p} failed: {e}. Falling back...")
+                break
+            except Exception as e:
+                last_error = str(e)
+                log_warn(f"Provider {p} failed: {e}. Falling back...")
+                break
     
     log_err(f"All LLMs failed for smart_llm_call. Last error: {last_error}")
     return ""
@@ -342,9 +347,17 @@ def _extract_json_block(raw: str) -> str | None:
     return None
 
 
-def llm_json(system: str, user: str, max_tokens: int = 2048, complexity: str = "routine") -> dict:
+def llm_json(system: str, user: str, max_tokens: int = 2048, complexity: str = "routine", provider: str = None) -> dict:
     """LLM call that returns parsed JSON, using smart routing and robust parsing."""
-    raw = smart_llm_call(system, user, max_tokens=max_tokens, complexity=complexity)
+    if provider:
+        try:
+            raw = llm_call(system, user, max_tokens=max_tokens, provider=provider)
+        except Exception as e:
+            log_warn(f"Requested provider {provider} failed: {e}. Falling back to smart routing...")
+            raw = smart_llm_call(system, user, max_tokens=max_tokens, complexity=complexity)
+    else:
+        raw = smart_llm_call(system, user, max_tokens=max_tokens, complexity=complexity)
+        
     if not raw:
         return {}
 
@@ -366,7 +379,12 @@ def kimi_enhance_prompt(prompt: str) -> str:
         log_warn("Moonshot/Kimi API key is not configured. Falling back to Trinity or raw prompt.")
         return trinity_enhance_prompt(prompt)
 
-    sys_prompt = "You are a world-class Staff Software Architect. The user will provide raw, basic task requirements. Your job is to transform these requirements into an extremely detailed, high-level technical blueprint and specification. Add best practices, edge-case handling, precise technological choices, and step-by-step logic."
+    sys_prompt = ("You are a world-class Staff Software Architect. The user will provide raw, basic task requirements. "
+                  "Your job is to transform these requirements into an extremely detailed, high-level technical blueprint and specification. "
+                  "Add best practices, edge-case handling, precise technological choices, and step-by-step logic. "
+                  "CRITICAL: Always prioritize the latest versions of all technologies, frameworks, and libraries. "
+                  "If you encounter obstacles or past failures, you MUST be extremely proactive: resolve the issues whatever it takes, "
+                  "even if it means changing the architecture, switching tools, or adopting a different approach to bypass the blocker.")
     try:
         resp = httpx.post(
             "https://api.moonshot.ai/v1/chat/completions",
@@ -375,7 +393,7 @@ def kimi_enhance_prompt(prompt: str) -> str:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "kimi-k2-thinking",
+                "model": "kimi-k2.5-thinking",
                 "messages": [
                     {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": f"Please enhance these raw requirements into a detailed architectural blueprint:\n\n{prompt}"},
@@ -400,6 +418,29 @@ def kimi_enhance_prompt(prompt: str) -> str:
         log_err(f"Moonshot Direct API failed: {e}. Falling back to Trinity.")
         return trinity_enhance_prompt(prompt)
 
+def claude_enhance_prompt(prompt: str) -> str:
+    """Uses Claude to enhance task requirements into a high-end implementation blueprint."""
+    sys_prompt = ("You are a world-class Staff Software Architect. The user will provide raw, basic task requirements. "
+                  "Your job is to transform these requirements into an extremely detailed, high-level technical blueprint and specification. "
+                  "Add best practices, edge-case handling, precise technological choices, and step-by-step logic. "
+                  "CRITICAL: Always prioritize the latest versions of all technologies, frameworks, and libraries. "
+                  "If you encounter obstacles or past failures, you MUST be extremely proactive: resolve the issues whatever it takes, "
+                  "even if it means changing the architecture, switching tools, or adopting a different approach to bypass the blocker.")
+    try:
+        enhanced = llm_call(
+            sys_prompt, 
+            f"Please enhance these raw requirements into a detailed architectural blueprint:\n\n{prompt}", 
+            max_tokens=4000, 
+            provider="claude-sonnet"
+        )
+        if len(enhanced) > 3000:
+            log_warn(f"Claude blueprint was {len(enhanced)} chars — trimming to 3000", "Claude")
+            enhanced = enhanced[:3000] + "\n\n[Blueprint truncated for token safety]"
+        return enhanced
+    except Exception as e:
+        log_err(f"Claude API failed: {e}. Falling back to Kimi.")
+        return kimi_enhance_prompt(prompt)
+
 
 def trinity_enhance_prompt(prompt: str) -> str:
     """Uses Arcee-AI Trinity Large Preview (Free via OpenRouter) as an alternative enhancement model."""
@@ -407,7 +448,10 @@ def trinity_enhance_prompt(prompt: str) -> str:
         log_warn("OPENROUTER_API_KEY is not configured. Returning raw prompt.")
         return prompt
 
-    sys_prompt = "You are a world-class Staff Software Architect. Enhance these basic requirements into a detailed technical specification."
+    sys_prompt = ("You are a world-class Staff Software Architect. Enhance these basic requirements into a detailed technical specification. "
+                  "CRITICAL: Always prioritize the latest versions of all technologies, frameworks, and libraries. "
+                  "If you encounter obstacles or past failures, you MUST be extremely proactive: resolve the issues whatever it takes, "
+                  "even if it means changing the architecture, switching tools, or adopting a different approach to bypass the blocker.")
     try:
         resp = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",

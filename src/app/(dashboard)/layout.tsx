@@ -8,11 +8,36 @@ import { apiClient } from "@/lib/api-client";
 
 /* Inline SVG icons (server-component safe) */
 const I = {
-  grid: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>,
-  plus: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>,
-  coin: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9 12h6"/></svg>,
-  bot:  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V7"/><circle cx="12" cy="5" r="2"/><path d="M8 16h.01M16 16h.01"/></svg>,
+  grid: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>,
+  plus: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" /></svg>,
+  coin: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><circle cx="12" cy="12" r="8" /><path d="M12 8v8M9 12h6" /></svg>,
+  bot: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M12 11V7" /><circle cx="12" cy="5" r="2" /><path d="M8 16h.01M16 16h.01" /></svg>,
 };
+
+/** Shown when the Python API is temporarily unavailable (timeout / overload). */
+function BackendUnavailable() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#F8F6F3]">
+      <div className="mx-auto max-w-sm rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+        <div className="mb-4 flex h-12 w-12 mx-auto items-center justify-center rounded-xl bg-amber-50">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6 text-amber-500">
+            <circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><circle cx="12" cy="16" r="1" fill="currentColor" />
+          </svg>
+        </div>
+        <h1 className="mb-1 text-sm font-semibold text-stone-800">API temporarily unavailable</h1>
+        <p className="mb-5 text-xs leading-relaxed text-stone-500">
+          The TaskHive backend is under heavy load (agents are running). Wait a moment and reload the page.
+        </p>
+        <a
+          href="."
+          className="inline-flex items-center gap-1.5 rounded-xl bg-stone-800 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700 transition-colors"
+        >
+          Reload
+        </a>
+      </div>
+    </div>
+  );
+}
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -20,10 +45,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   let user: any;
   try {
-    const res = await apiClient("/api/v1/user/profile", { headers: { "X-User-ID": String(session.user.id) } });
-    if (!res.ok) redirect("/login");
+    const res = await apiClient("/api/v1/user/profile", {
+      headers: { "X-User-ID": String(session.user.id) },
+      cache: "no-store",
+    });
+    // Only redirect to login on genuine auth failures (401/403).
+    if (res.status === 401 || res.status === 403) redirect("/login");
+    if (!res.ok) {
+      return <BackendUnavailable />;
+    }
     user = await res.json();
-  } catch { redirect("/login"); }
+  } catch {
+    return <BackendUnavailable />;
+  }
   if (!user?.name) redirect("/login");
 
   const initials = user.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -43,11 +77,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 px-3 pt-2">
           <SideLabel>Workspace</SideLabel>
-          <SideLink href="/dashboard"              icon={I.grid}>Dashboard</SideLink>
+          <SideLink href="/dashboard" icon={I.grid}>Dashboard</SideLink>
           <SideLink href="/dashboard/tasks/create" icon={I.plus}>Post a Task</SideLink>
-          <SideLink href="/dashboard/credits"      icon={I.coin}>Credits</SideLink>
+          <SideLink href="/dashboard/credits" icon={I.coin}>Credits</SideLink>
           <SideLabel className="mt-5">Agents</SideLabel>
-          <SideLink href="/dashboard/agents"       icon={I.bot}>My Agents</SideLink>
+          <SideLink href="/dashboard/agents" icon={I.bot}>My Agents</SideLink>
         </nav>
 
         {/* Footer */}

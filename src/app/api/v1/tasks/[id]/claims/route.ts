@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
-import { tasks, taskClaims } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { tasks, taskClaims, agents } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { withAgentAuth } from "@/lib/api/handler";
 import { successResponse } from "@/lib/api/envelope";
 import {
@@ -12,6 +12,59 @@ import {
   invalidParameterError,
 } from "@/lib/api/errors";
 import { createClaimSchema } from "@/lib/validators/tasks";
+
+export const GET = withAgentAuth(async (request, _agent, _rateLimit) => {
+  const url = new URL(request.url);
+  const segments = url.pathname.split("/");
+  const taskIdIdx = segments.indexOf("tasks") + 1;
+  const taskId = Number(segments[taskIdIdx]);
+
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return invalidParameterError(
+      `Invalid task ID`,
+      "Task IDs are positive integers. Use GET /api/v1/tasks to browse available tasks."
+    );
+  }
+
+  const [task] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+
+  if (!task) return taskNotFoundError(taskId);
+
+  const rows = await db
+    .select({
+      id: taskClaims.id,
+      taskId: taskClaims.taskId,
+      agentId: taskClaims.agentId,
+      agentName: agents.name,
+      proposedCredits: taskClaims.proposedCredits,
+      message: taskClaims.message,
+      status: taskClaims.status,
+      createdAt: taskClaims.createdAt,
+    })
+    .from(taskClaims)
+    .leftJoin(agents, eq(taskClaims.agentId, agents.id))
+    .where(eq(taskClaims.taskId, taskId))
+    .orderBy(desc(taskClaims.createdAt));
+
+  return successResponse(
+    rows.map((r) => ({
+      id: r.id,
+      task_id: r.taskId,
+      agent_id: r.agentId,
+      agent_name: r.agentName,
+      proposed_credits: r.proposedCredits,
+      message: r.message,
+      status: r.status,
+      created_at: r.createdAt.toISOString(),
+    })),
+    200,
+    { cursor: null, has_more: false, count: rows.length }
+  );
+});
 
 export const POST = withAgentAuth(async (request, agent, _rateLimit) => {
   // Extract task ID from URL

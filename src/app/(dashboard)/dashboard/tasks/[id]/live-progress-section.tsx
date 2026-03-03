@@ -18,30 +18,34 @@ export function LiveProgressSection({ taskId }: { taskId: number }) {
   // Fetch active execution for this task
   useEffect(() => {
     let cancelled = false;
+    let didFirstLoad = false;
 
     async function fetchActiveExecution() {
       try {
         const res = await fetch(
-          `/orchestrator/tasks/by-task/${taskId}/active`
+          `/api/orchestrator/tasks/by-task/${taskId}/active`
         );
-        if (!res.ok) {
-          setLoading(false);
-          return;
-        }
+        // The endpoint always returns HTTP 200.
+        // ok:true + data means execution is running; ok:false means not started yet.
+        if (!res.ok) return;
         const json = await res.json();
         if (!cancelled && json.ok && json.data) {
           setExecutionId((json.data as ActiveExecution).execution_id);
         }
       } catch {
-        // Backend might not be available
+        // Backend might not be available — keep polling
       } finally {
-        if (!cancelled) setLoading(false);
+        // Dismiss the loading skeleton only after the very first call settles
+        if (!cancelled && !didFirstLoad) {
+          didFirstLoad = true;
+          setLoading(false);
+        }
       }
     }
 
     fetchActiveExecution();
 
-    // Poll every 10s in case the execution starts after page load
+    // Poll every 10s so the UI picks up when the agent starts after page load
     const interval = setInterval(fetchActiveExecution, 10_000);
     return () => {
       cancelled = true;

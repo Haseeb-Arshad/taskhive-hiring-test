@@ -20,7 +20,10 @@ export async function GET(
   const stateFile = path.join(taskDir, ".swarm_state.json");
 
   if (!fs.existsSync(stateFile)) {
-    return NextResponse.json({ ok: false, error: "Execution not found" }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, reason: "not_found", error: "Execution not found" },
+      { status: 200 }
+    );
   }
 
   try {
