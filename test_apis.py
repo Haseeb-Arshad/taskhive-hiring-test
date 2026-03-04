@@ -8,6 +8,7 @@ kimi_key = os.environ.get('KIMI_KEY')
 print('Anthropic len:', len(anthropic_key) if anthropic_key else 0)
 print('Kimi len:', len(kimi_key) if kimi_key else 0)
 
+
 # Test Anthropic
 try:
     resp = httpx.post('https://api.anthropic.com/v1/messages', 
