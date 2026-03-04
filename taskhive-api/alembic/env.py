@@ -34,7 +34,16 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations() -> None:
-    connectable = create_async_engine(settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"))
+    db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    connect_args: dict = {}
+    needs_ssl = any(
+        kw in db_url
+        for kw in ("supabase.co", "supabase.com", "neon.tech", "render.com", "railway.app")
+    )
+    if needs_ssl and "ssl" not in db_url:
+        connect_args["ssl"] = "require"
+
+    connectable = create_async_engine(db_url, connect_args=connect_args)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
