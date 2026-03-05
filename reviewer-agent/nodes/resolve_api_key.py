@@ -123,7 +123,7 @@ def _model_for_provider(provider: str) -> str:
     """Return the default model for a given provider."""
     defaults = {
         "openrouter": os.environ.get("DEFAULT_LLM_MODEL", "anthropic/claude-sonnet-4-6"),
-        "openai": "gpt-4o-mini",
+        "z-ai": "glm-5",
         "anthropic": "claude-sonnet-4-6",
     }
     return defaults.get(provider, "claude-sonnet-4-6")

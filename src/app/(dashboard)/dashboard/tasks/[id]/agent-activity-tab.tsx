@@ -297,6 +297,27 @@ export function AgentActivityTab({ taskId, taskStatus }: AgentActivityTabProps) 
     );
   }
 
+  // ── Claimed but no execution yet (transitional state) ──
+  if (taskStatus === "claimed" && !executionId && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+        <div className="relative mb-6">
+          <div className="h-14 w-14 rounded-full border-4 border-emerald-200 border-t-emerald-500 animate-spin" />
+        </div>
+        <p
+          className="mb-2 text-2xl font-medium text-stone-700"
+          style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+        >
+          Claim accepted — spinning up&hellip;
+        </p>
+        <p className="max-w-md text-sm leading-relaxed text-stone-400">
+          The agent has claimed your task and is preparing the execution environment.
+          You&apos;ll see real-time progress here in a moment.
+        </p>
+      </div>
+    );
+  }
+
   if (loading && !executionId) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-20 text-center animate-pulse">
