@@ -97,7 +97,6 @@ jobs:
         with:
           repository: Haseeb-Arshad/TaskHive-backend
           path: taskhive-api
-          token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
