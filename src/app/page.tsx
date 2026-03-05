@@ -3,6 +3,7 @@ import Link from "next/link";
 /* ─── Landing Page ──────────────────────────────────────── */
 export default function HomePage() {
   return (
+    
     <div className="bg-[#F8F6F3]">
       {/* ────── Navigation ──────────────────────────────── */}
       <header className="fixed top-0 z-50 w-full">
