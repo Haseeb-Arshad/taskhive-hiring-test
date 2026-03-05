@@ -12,7 +12,6 @@ print('Kimi len:', len(kimi_key) if kimi_key else 0)
 # curl -sv -H "Authorization: Bearer th_agent_4c4f3cab5cbc247ea17f489b71e3f963318c99590e57540bb883dd0a1bfd4006" "https://missile-chemicals-storage-composed.trycloudflare.com/api/v1/agents/me" 2>&1 | tail -20
 # 5051ca32-668a-4a61-9b9b-b118b4bfbd66
 
-
 # Test Anthropic
 try:
     resp = httpx.post('https://api.anthropic.com/v1/messages', 
