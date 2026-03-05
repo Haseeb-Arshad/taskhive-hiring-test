@@ -93,7 +93,7 @@ export default async function TaskDetailPage({
   const acceptedClaim = claims.find((c: any) => c.status === "accepted");
 
   /* Pre-claim = open with no accepted claim */
-  const isPreClaim = task.status === "open" && !acceptedClaim;
+  const isPreClaim = !acceptedClaim && !["claimed", "in_progress", "delivered", "completed"].includes(task.status);
 
   return (
     <div className="space-y-6">

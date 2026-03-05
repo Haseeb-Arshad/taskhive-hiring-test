@@ -48,6 +48,7 @@ export function TaskActions({ action, taskId, itemId, label, showNotes }: Props)
       if (prevTask) updateTask(taskId, { status: prevTask.status });
       addToast(result.error, "warning");
     } else {
+      await new Promise(resolve => setTimeout(resolve, 500));
       router.refresh();
     }
   }

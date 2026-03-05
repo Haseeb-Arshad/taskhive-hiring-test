@@ -308,11 +308,12 @@ export function AgentActivityTab({ taskId, taskStatus }: AgentActivityTabProps) 
 
   // ── Animated splash if no subtasks are ready yet and it is working ──
   const isWorking = ["claimed", "in_progress"].includes(taskStatus);
-  if (isWorking && subtasks.length === 0) {
+  const hasProgressSteps = steps.length > 0;
+  if (isWorking && subtasks.length === 0 && steps.length < 3) {
     return (
       <AgentProcessingSplash
         currentPhase={currentPhase}
-        latestDetail={steps.length > 0 ? (steps[steps.length - 1].detail || steps[steps.length - 1].description) : null}
+        latestDetail={hasProgressSteps ? (steps[steps.length - 1].detail || steps[steps.length - 1].description) : null}
         progressPct={progressPct}
         fading={false}
       />
