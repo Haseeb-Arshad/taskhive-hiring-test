@@ -342,13 +342,12 @@ function YesNoInput({
           key={opt}
           disabled={disabled}
           onClick={() => onChange(opt)}
-          className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all ${
-            value === opt
+          className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all ${value === opt
               ? opt === "Yes"
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
                 : "border-red-300 bg-red-50 text-red-700 ring-1 ring-red-200"
               : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50"
-          } disabled:opacity-50`}
+            } disabled:opacity-50`}
         >
           {opt === "Yes" ? (
             <span className="flex items-center justify-center gap-1.5">
@@ -397,20 +396,18 @@ function McqInput({
             key={idx}
             disabled={disabled}
             onClick={() => toggleOption(option)}
-            className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm transition-all ${
-              isSelected
+            className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm transition-all ${isSelected
                 ? "border-[#E5484D]/40 bg-[#FFF1F2] text-[#E5484D] ring-1 ring-[#E5484D]/20"
                 : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
-            } disabled:opacity-50`}
+              } disabled:opacity-50`}
           >
             <span className="flex items-center gap-2.5">
               {/* Square checkbox to signal multi-select */}
               <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-[10px] ${
-                  isSelected
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-[10px] ${isSelected
                     ? "border-[#E5484D] bg-[#E5484D] text-white"
                     : "border-stone-300"
-                }`}
+                  }`}
               >
                 {isSelected && "\u2713"}
               </span>
@@ -477,11 +474,10 @@ function ScaleInput({
             key={step}
             disabled={disabled}
             onClick={() => onChange(String(step))}
-            className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-all ${
-              selected === step
+            className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-all ${selected === step
                 ? "border-violet-400 bg-violet-100 text-violet-800 ring-1 ring-violet-200"
                 : "border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:bg-stone-50"
-            } disabled:opacity-50`}
+              } disabled:opacity-50`}
           >
             {step}
           </button>
@@ -526,6 +522,10 @@ function RelatedClaimPanel({ claim, taskId }: { claim: any; taskId: number }) {
     const result = await acceptClaim(taskId, claim.id);
     if (result.success) {
       setAccepted(true);
+      // After accepting a claim, switch to the activity tab
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "activity");
+      window.history.replaceState(null, "", url.toString());
       // Refresh page so ClaimsSection, task status banner, etc. all update
       router.refresh();
     } else if (result.error) {
@@ -546,13 +546,12 @@ function RelatedClaimPanel({ claim, taskId }: { claim: any; taskId: number }) {
         <p className="text-[11px] font-bold uppercase tracking-[.12em] text-stone-400">
           This Agent&apos;s Claim
         </p>
-        <span className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-          accepted
+        <span className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] font-medium ${accepted
             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
             : claim.status === "rejected"
-            ? "border-red-200 bg-red-50 text-red-600"
-            : "border-amber-200 bg-amber-50 text-amber-700"
-        }`}>
+              ? "border-red-200 bg-red-50 text-red-600"
+              : "border-amber-200 bg-amber-50 text-amber-700"
+          }`}>
           {accepted ? "accepted" : claim.status}
         </span>
       </div>
