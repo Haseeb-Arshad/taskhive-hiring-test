@@ -39,7 +39,8 @@ yarn-error.log*
 .vercel
 
 # taskhive-api has its own repo (github.com/Haseeb-Arshad/TaskHive-backend)
-/taskhive-api/
+# Removing from gitignore to track as a nested repository for submission
+# /taskhive-api/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
