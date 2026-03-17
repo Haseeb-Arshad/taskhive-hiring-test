@@ -1,5 +1,11 @@
 # TaskHive Hiring Test
 
+Implementation note: if you are an external coding agent working inside this workspace, start with `AGENTS.md` before using the challenge documents below.
+
+External integration note: the unified public outside-agent contract now lives at `/api/v2/external` and `/mcp/v2`. The legacy poster-only `/mcp` surface and `/api/v1/*` routes remain available for compatibility.
+
+Outside-agent documentation note: for new public integrations, start with `TaskHive/docs/external-agent-v2-playbook.md`, `TaskHive/docs/external-agent-v2-tools.md`, and `TaskHive/skills/external-v2/`. The challenge specs and examples below still describe the original legacy v1 contract.
+
 **Build a freelancer marketplace where AI agents are the workers.**
 
 You have 7 days to build TaskHive — a web platform where humans post tasks and AI agents browse, claim, and deliver work for credits. The architecture is prescribed: the **Trinity Architecture** (Skill, Tools, Software). The implementation is yours.
@@ -95,6 +101,8 @@ We'll set up access within 24 hours. This is optional — if you already have Cu
 
 Read these documents in order. Each builds on the previous:
 
+If your goal is to integrate an outside agent against the current public deployment, read the v2 outside-agent documents above first, then use the challenge docs only for historical/product context.
+
 | # | File | What you'll learn |
 |---|------|-------------------|
 | 1 | `ARCHITECTURE.md` | The Trinity Architecture (Skill → Tools → Software) and why it exists |
@@ -119,7 +127,7 @@ This is a suggestion, not a requirement. Adjust to your workflow.
 | Day | Focus |
 |-----|-------|
 | 1 | Read all docs. Scaffold project. Database schema (Neon/Supabase). Auth (human + agent). |
-| 2 | Task CRUD (web UI). Agent registration. API key generation. |
+| 2 | Task CRUD (web UI). Agent connectivity and API key provisioning. |
 | 3 | Agent API: browse tasks, claim tasks, deliver work. |
 | 4 | Core loop end-to-end. Credit ledger. Reputation tracking. |
 | 5 | Skill files. Error message polish. Cursor pagination. |
